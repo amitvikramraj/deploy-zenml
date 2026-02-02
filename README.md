@@ -116,11 +116,22 @@ Updated the global store configuration.
 9. Cleanup
 ```shell
 # Uninstall the ZenML Server
-helm uninstall zenml-server --namespace zenml
+╭─amit@mac ~/repos/zenml/zenml-local ‹main●› 
+╰─$ helm uninstall zenml-server --namespace zenml
+release "zenml-server" uninstalled
 
 # Delete the namespace
-kubectl delete namespace zenml
+╭─amit@mac ~/repos/zenml/zenml-local ‹main› 
+╰─$ kubectl delete namespace zenml
+namespace "zenml" deleted
 
 # Delete the k3d cluster
-k3d cluster delete zenml-local
+╭─amit@mac ~/repos/zenml/zenml-local ‹main› 
+╰─$ k3d cluster delete zenml-local
+INFO[0000] Deleting cluster 'zenml-local'               
+INFO[0001] Deleting cluster network 'k3d-zenml-local'   
+INFO[0001] Deleting 1 attached volumes...               
+INFO[0001] Removing cluster details from default kubeconfig... 
+INFO[0001] Removing standalone kubeconfig file (if there is one)... 
+INFO[0001] Successfully deleted cluster zenml-local!  
 ```
