@@ -398,6 +398,21 @@ wheels = [
 ]
 
 [[package]]
+name = "deploy-zenml"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "pip" },
+    { name = "zenml", extra = ["server"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pip", specifier = ">=25.3" },
+    { name = "zenml", extras = ["server"], specifier = ">=0.93.2" },
+]
+
+[[package]]
 name = "distro"
 version = "1.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1816,21 +1831,6 @@ server = [
     { name = "sqlmodel" },
     { name = "tldextract" },
     { name = "uvicorn", extra = ["standard"] },
-]
-
-[[package]]
-name = "zenml-local"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "pip" },
-    { name = "zenml", extra = ["server"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "pip", specifier = ">=25.3" },
-    { name = "zenml", extras = ["server"], specifier = ">=0.93.2" },
 ]
 
 [[package]]
