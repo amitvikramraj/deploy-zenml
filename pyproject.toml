@@ -4,4 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["pip>=25.3", "zenml>=0.93.2"]
+dependencies = [
+    "pip>=25.3",
+    "zenml[server]>=0.93.2",
+]

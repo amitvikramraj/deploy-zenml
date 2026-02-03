@@ -1,0 +1,125 @@
+#! /usr/bin/env bash
+
+set -ex
+
+
+THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
+
+
+# Create a k3d cluster with 1 server and 2 agents
+# k3d cluster create zenml-multi --servers 1 --agents 2 --api-port 6550
+
+# mysql.zenml-db.svc.cluster.local:3306
+install:mysql() {
+    # ref: https://github.com/bitnami/charts/tree/main/bitnami/mysql
+
+    mkdir -p "${THIS_DIR}/helm"
+    local HELM_DIR="${THIS_DIR}/helm"
+
+    # set the mysql credentials
+    local MYSQL_ROOT_PASSWORD='rootpass'
+    local MYSQL_USER='zenml'
+    local MYSQL_PASSWORD='zenmlpass'
+    local MYSQL_DATABASE='zenml'
+
+    helm repo add bitnami https://charts.bitnami.com/bitnami
+    helm repo update
+
+    # create a namespace for the mysql server if not exists
+    kubectl create namespace zenml-db || true
+
+    # install the mysql server
+    # volumePermissions.enabled=false: bitnami/os-shell is also removed; skip init container that chowns the volume
+    # Bitnami removed free images from docker.io/bitnami (Broadcom 2025). Use legacy archive: docker.io/bitnamilegacy/mysql
+    
+    # ref: https://hub.docker.com/r/bitnamilegacy/mysql/tags
+    helm upgrade mysql bitnami/mysql \
+        --namespace zenml-db \
+        --set auth.rootPassword="$MYSQL_ROOT_PASSWORD" \
+        --set auth.username="$MYSQL_USER" \
+        --set auth.password="$MYSQL_PASSWORD" \
+        --set auth.database="$MYSQL_DATABASE" \
+        --set volumePermissions.enabled=false \
+        --set image.registry=docker.io \
+        --set image.repository=bitnamilegacy/mysql \
+        --set image.tag=9.4.0-debian-12-r1
+}
+
+
+install:vault() {
+    # ref: https://developer.hashicorp.com/vault/docs/deploy/kubernetes/helm/run
+
+    helm repo add hashicorp https://helm.releases.hashicorp.com
+    helm repo update
+
+    kubectl create namespace zenml-vault || true
+
+    helm install zenml-vault hashicorp/vault \
+    --namespace zenml-vault \
+    --set "server.dev.enabled=true"
+    # ^^^run in dev mode
+
+    # port forward
+    # kubectl --namespace zenml-vault port-forward svc/zenml-vault 8200:8200
+
+    # Get root token (dev mode): printed in pod logs at startup
+    # kubectl logs zenml-vault-0 -n zenml-vault | grep -i root
+}
+
+
+install:zenml-server() {
+    mkdir -p "${THIS_DIR}/helm"
+    local HELM_DIR="${THIS_DIR}/helm"
+
+    export MYSQL_USER='zenml'
+    export MYSQL_PASSWORD='zenmlpass'
+    export MYSQL_DATABASE='zenml'
+    export MYSQL_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+    export VAULT_ADDR='http://host.docker.internal:8200'
+    export VAULT_TOKEN='root'
+
+    # Pull the latest ZenML Server chart
+    if [[ ! -d "${HELM_DIR}/zenml" ]]; then
+        helm pull oci://public.ecr.aws/zenml/zenml --untar --untardir "${HELM_DIR}"
+    fi
+
+    if [[ ! -f "${HELM_DIR}/values-local.yaml" ]]; then
+        cp "${HELM_DIR}/zenml/values.yaml" "${HELM_DIR}/values-local.yaml"
+    fi
+
+    # Create a namespace for the ZenML Server if not exists
+    kubectl create namespace zenml || true
+
+    # Substitute env vars in values (MYSQL_*, VAULT_*) so Helm gets literal values
+    # envsubst only replaces the listed vars; others (e.g. Helm {{ .Values }}) are left alone
+    # install the zenml server
+    helm install zenml-server "${HELM_DIR}/zenml" \
+        --namespace zenml \
+        --values <(envsubst '$MYSQL_USER $MYSQL_PASSWORD $MYSQL_DATABASE $MYSQL_ENCRYPTION_KEY $VAULT_ADDR $VAULT_TOKEN' < "${HELM_DIR}/values-local.yaml")
+
+    # Port forward the ZenML Server service to the local machine
+    # kubectl --namespace zenml port-forward svc/zenml-server 8080:80
+}
+
+
+
+run:pipeline() {
+    uv run zenml init || true
+    uv run main.py
+}
+
+deploy:pipeline() {
+    uv run zenml pipeline deploy main.hello_world_pipeline
+}
+
+
+# print all functions in this file
+help() {
+    echo "$0 <task> <args>"
+    echo "Tasks:"
+    compgen -A function | cat -n
+}
+
+
+TIMEFORMAT="Task completed in %3lR"
+time ${@:-help}

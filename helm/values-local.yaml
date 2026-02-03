@@ -325,7 +325,7 @@ zenml:
     # option.
     #
     # E.g.: "mysql://admin:password@zenml-mysql:3306/database"
-    url:
+    url: "mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql.zenml-db.svc.cluster.local:3306/${MYSQL_DATABASE}"
 
     # The Kubernetes secret containing the MySQL password. If not set, the
     # password provided in the `url` option will be used.
@@ -509,7 +509,7 @@ zenml:
       # database and will have to reset them. You should not change this value
       # after you have already configured encryption for your SQL database
       # secrets store.
-      encryptionKey:
+      encryptionKey: "${MYSQL_ENCRYPTION_KEY}"
 
     # AWS secrets store configuration. Only relevant if the `aws` secrets store
     # type is configured.
@@ -730,7 +730,7 @@ zenml:
       authConfig:
 
         # The url of the HashiCorp Vault server
-        vault_addr: https://vault.example.com
+        vault_addr: "${VAULT_ADDR}"
         # The Vault Enterprise namespace. Not required for Vault OSS.
         vault_namespace:
         # The mount point to use (defaults to "secret" if not set)
@@ -752,7 +752,7 @@ zenml:
         aws_header_value:
         # The token to use with the token authentication method. Required if the
         # authentication method is token.
-        vault_token:
+        vault_token: "${VAULT_TOKEN}"
         # The maximum number of secret versions to keep. If not set, the default
         # value of 1 will be used (only the latest version will be kept).
         max_versions:

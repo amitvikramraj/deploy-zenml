@@ -1,5 +1,6 @@
 # Helm (pulled chart; re-fetch with: helm pull oci://public.ecr.aws/zenml/zenml --untar)
-helm/zenml/
+helm/*
+!helm/values-local.yaml
 
 # Python
 **/*cache/
