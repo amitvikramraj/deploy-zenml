@@ -6,6 +6,24 @@ set -ex
 THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
 
 
+
+install:zenml-server-aws () {
+    source "${THIS_DIR}/.env"
+
+    export AWS_PROFILE=zenml-dev
+
+    helm upgrade --install zenml-server oci://public.ecr.aws/zenml/zenml \
+        --namespace zenml-amit \
+        --values <(envsubst \
+            '$AWS_SQL_USERNAME $AWS_SQL_PASSWORD $AWS_SQL_HOST $AWS_SQL_PORT \
+            $AWS_SQL_DB_NAME $TENANT_DEFAULT_ENCRYPTION_KEY \
+            $VAULT_ADDR $VAULT_MOUNT_POINT $VAULT_AWS_ROLE \
+            $VAULT_AUTH_METHOD $VAULT_AWS_HEADER_VALUE' \
+            < "${THIS_DIR}/helm/values-aws.yaml")
+}
+
+
+
 # Create a k3d cluster with 1 server and 2 agents
 # k3d cluster create zenml-multi --servers 1 --agents 2 --api-port 6550
 
@@ -33,7 +51,7 @@ install:mysql() {
     # Bitnami removed free images from docker.io/bitnami (Broadcom 2025). Use legacy archive: docker.io/bitnamilegacy/mysql
     
     # ref: https://hub.docker.com/r/bitnamilegacy/mysql/tags
-    helm upgrade mysql bitnami/mysql \
+    helm upgrade --install mysql bitnami/mysql \
         --namespace zenml-db \
         --set auth.rootPassword="$MYSQL_ROOT_PASSWORD" \
         --set auth.username="$MYSQL_USER" \
@@ -54,7 +72,7 @@ install:vault() {
 
     kubectl create namespace zenml-vault || true
 
-    helm install zenml-vault hashicorp/vault \
+    helm upgrade --install zenml-vault hashicorp/vault \
     --namespace zenml-vault \
     --set "server.dev.enabled=true"
     # ^^^run in dev mode
@@ -93,7 +111,7 @@ install:zenml-server() {
     # Substitute env vars in values (MYSQL_*, VAULT_*) so Helm gets literal values
     # envsubst only replaces the listed vars; others (e.g. Helm {{ .Values }}) are left alone
     # install the zenml server
-    helm install zenml-server "${HELM_DIR}/zenml" \
+    helm upgrade --install zenml-server "${HELM_DIR}/zenml" \
         --namespace zenml \
         --values <(envsubst '$MYSQL_USER $MYSQL_PASSWORD $MYSQL_DATABASE $MYSQL_ENCRYPTION_KEY $VAULT_ADDR $VAULT_TOKEN' < "${HELM_DIR}/values-local.yaml")
 
