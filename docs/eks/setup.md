@@ -39,7 +39,7 @@ clusters:
     name: docker-desktop
   - cluster:
       certificate-authority-data: ...
-      server: https://40AD81AC7F685811ECEAD0BD071D69F4.gr7.eu-central-1.eks.amazonaws.com
+      server: <eks-cluster-server-url>
     name: arn:aws:eks:<aws-region>:<aws-account-id>:cluster/<cluster-name>
 contexts:
   - context:
@@ -286,7 +286,7 @@ zenml:
     tls:
       enabled: true
       generateCerts: false
-      secretName: zenml-amit-tls-certs
+      secretName: zenml-tls-certs
 ```
 
 7. Deploy the ZenML Server
@@ -329,7 +329,7 @@ kubectl -n zenml-amit logs pod/zenml-server-db-migration-fwphp --follow --all-co
 kubectl -n zenml-amit logs pod/zenml-server-db-migration-fwphp --follow --all-containers
 
 RuntimeError: Error initializing hashicorp secrets store: Vault is sealed, on 
-post https://vault.staging.cloudinfra.zenml.io/v1/auth/aws/login
+post https://vault.staging.example.com/v1/auth/aws/login
 ```
 
 
@@ -338,9 +338,78 @@ post https://vault.staging.cloudinfra.zenml.io/v1/auth/aws/login
 kubectl -n zenml-amit describe challenge <challenge-name>
 
 Reason: Waiting for HTTP-01 challenge propagation: failed to perform self check GET request 'http://zenml-amit.<ip>.nip.io/.well-known/acme-challenge/1tZl4C40JdxtU_04Se50sOTW5avqf5CxrD6cmC_NaTA': Get "http://zenml-amit.<ip>.nip.io/.well-known/acme-challenge/1tZl4C40JdxtU_04Se50sOTW5avqf5CxrD6cmC_NaTA": dial tcp <ip>:80: connect: connection refused
+
+
+kubectl -n zenml-amit describe cert
+
+Name:         zenml-tls-certs
+Namespace:    zenml-amit
+Labels:       app.kubernetes.io/instance=zenml-server
+              app.kubernetes.io/managed-by=Helm
+              app.kubernetes.io/name=zenml
+              app.kubernetes.io/version=0.93.2
+              helm.sh/chart=zenml-0.93.2
+Annotations:  <none>
+API Version:  cert-manager.io/v1
+Kind:         Certificate
+Metadata:
+  Creation Timestamp:  2026-02-04T12:45:15Z
+  Generation:          1
+  Owner References:
+    API Version:           networking.k8s.io/v1
+    Block Owner Deletion:  true
+    Controller:            true
+    Kind:                  Ingress
+    Name:                  zenml-server
+    UID:                   d90d9c05-5243-4f26-8ee4-2d012be9df9b
+  Resource Version:        253813479
+  UID:                     fd4e10d6-7086-4e33-a524-7e7200fea86c
+Spec:
+  Dns Names:
+    zenml-amit.18.198.138.196.nip.io
+  Issuer Ref:
+    Group:      cert-manager.io
+    Kind:       ClusterIssuer
+    Name:       letsencrypt
+  Secret Name:  zenml-tls-certs
+  Usages:
+    digital signature
+    key encipherment
+Status:
+  Conditions:
+    Last Transition Time:        2026-02-04T12:45:15Z
+    Message:                     Issuing certificate as Secret does not exist
+    Observed Generation:         1
+    Reason:                      DoesNotExist
+    Status:                      True
+    Type:                        Issuing
+    Last Transition Time:        2026-02-04T12:45:15Z
+    Message:                     Issuing certificate as Secret does not exist
+    Observed Generation:         1
+    Reason:                      DoesNotExist
+    Status:                      False
+    Type:                        Ready
+  Next Private Key Secret Name:  zenml-tls-certs-h8p9x
+Events:
+  Type    Reason     Age    From                                       Message
+  ----    ------     ----   ----                                       -------
+  Normal  Issuing    2m21s  cert-manager-certificates-trigger          Issuing certificate as Secret does not exist
+  Normal  Generated  2m21s  cert-manager-certificates-key-manager      Stored new private key in temporary Secret resource "zenml-tls-certs-h8p9x"
+  Normal  Requested  2m21s  cert-manager-certificates-request-manager  Created new CertificateRequest resource "zenml-tls-certs-wzlrr"
+
+
+curl -k https://zenml-amit.<ip>.nip.io
+# ^^^This was giving me error
+<html>
+<head><title>308 Permanent Redirect</title></head>
+<body>
+<center><h1>308 Permanent Redirect</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
 ```
 
-  * So to clean up the certificate resources, I first disable the `tls: enabled: false` in the values file, and used the following commands to clean up the certificate resources.
+  * So to clean up the certificate resources, I first disable the `tls: enabled: false` in the values file, redeployed the ZenML Server so that the certificate resources are freed up and then used the following commands to clean up the certificate resources.
 
 Cleaning up:
 ```shell
@@ -356,3 +425,136 @@ kubectl -n zenml-amit get certificate,order,challenge,secret | egrep -i 'zenml|a
 ```
 
 * The deployment works without the TLS and you can access the ZenML Server UI via the public URL. Although the browser will shows "Not secure" which is expected.
+
+
+## Appendix: Understanding the problem from first principles
+
+This section explains the networking and TLS concepts so you can see *why* the nip.io + cert-manager approach caused trouble and why switching to a pre-configured staging domain (e.g. `zenml-amit.staging.example.com`) fixes it.
+
+### 1. How does traffic reach your ZenML server?
+
+High-level path from "user's browser" to "ZenML server pod":
+
+```
+User's browser
+    → DNS (resolve hostname to IP)
+    → That IP is the Load Balancer (ELB) in front of ingress-nginx
+    → Load Balancer forwards to ingress-nginx pods (port 80/443)
+    → Ingress controller reads the Host header, finds your Ingress rule
+    → Forwards to the ZenML Service (ClusterIP)
+    → Service forwards to a ZenML pod
+```
+
+**Concepts:**
+
+- **Service (ClusterIP)**  
+  A stable DNS name and IP inside the cluster (e.g. `zenml-server.zenml-amit.svc.cluster.local`). Other things in the cluster (and the ingress controller) talk to your app via this Service, not directly to the pod IP (which can change).
+
+- **Ingress**  
+  An HTTP/HTTPS *routing* rule: "for this hostname and path, send traffic to this Service". It does not expose anything by itself; the **Ingress controller** (e.g. ingress-nginx) is the process that actually receives traffic from the Load Balancer and applies these rules.
+
+- **Load Balancer (e.g. AWS ELB)**  
+  The piece that gets a public IP/hostname. All traffic from the internet to your cluster hits this first, then goes to the ingress-nginx pods. So the "entry point" for the cluster is the LB; everything else is internal routing.
+
+So: **hostname → DNS → LB → ingress-nginx → your Ingress rule → ZenML Service → ZenML pod.**
+
+### 2. What is TLS (HTTPS) and what does cert-manager do?
+
+- **TLS** = the "S" in HTTPS. The browser and the server encrypt traffic and the browser checks that the server holds a certificate for the domain you typed (e.g. `zenml-amit.example.com`). That certificate is issued by a **Certificate Authority (CA)**; Let's Encrypt is one such CA.
+
+- **cert-manager** is a Kubernetes component that *obtains* certificates from CAs (like Let's Encrypt) and stores them in Kubernetes Secrets. To get a cert, the CA must verify that you control the domain. The usual method is **HTTP-01 challenge**:
+
+  1. cert-manager asks Let's Encrypt for a cert for `zenml-amit.<ip>.nip.io`.
+  2. Let's Encrypt says: "Put this token at `http://zenml-amit.<ip>.nip.io/.well-known/acme-challenge/<token>` and I'll fetch it."
+  3. cert-manager creates a temporary pod/service/ingress so that when *someone* requests that URL, the response is that token.
+  4. Let's Encrypt does a GET request from the internet to that URL.
+  5. If it gets the token back, it issues the certificate.
+
+For step 4 to work, the request path must be:
+
+- **DNS**: `zenml-amit.<ip>.nip.io` must resolve to the IP of your Load Balancer (so Let's Encrypt hits your cluster).
+- **Routing**: Port 80 on that IP must reach the ingress controller, and the ingress controller must route `/.well-known/acme-challenge/...` to the ACME solver pod (or the challenge fails).
+
+If *any* of that is wrong (wrong IP, port closed, wrong host routing, firewall), the challenge fails. Your error was:
+
+```text
+failed to perform self check GET request 'http://zenml-amit.<ip>.nip.io/.well-known/acme-challenge/...': dial tcp <ip>:80: connect: connection refused
+```
+
+So from cert-manager's point of view, **port 80 on that IP was not reachable**. That can be due to:
+
+- A different ingress controller or LB handling that hostname.
+- Firewall / security group blocking port 80.
+- The LB or ingress not being configured to accept HTTP for that host yet (e.g. TLS redirect or routing misconfiguration).
+
+Debugging this on nip.io often means chasing DNS, LB, and ingress config together, which is why Stefan recommended avoiding nip.io when it doesn't work out of the box.
+
+### 3. Why does a pre-configured staging domain (e.g. `zenml-amit.staging.example.com`) work without cert-manager?
+
+Stefan said:
+
+- *"This domain is already attached to the ingress controller"*  
+  So the cluster's ingress (and the LB in front of it) is already set up to accept traffic for `*.staging.example.com` (or whatever staging domain your team uses). DNS for that domain already points to the right Load Balancer, and the ingress controller already has (or shares) a TLS certificate for that wildcard.
+
+- *"You don't need to use the certificate manager anymore, get rid of the annotation"*  
+  So you don't need to *request* a new certificate for your hostname. The TLS termination for the staging wildcard is already handled (e.g. a wildcard cert is already on the ingress controller or on a layer in front of it). Your Ingress only needs to say: "for host `zenml-amit.staging.example.com` (or your assigned hostname), route to the ZenML service." No `cert-manager.io/cluster-issuer` and no Certificate resource needed.
+
+- *"You can basically use anything in the form \*.staging.example.com in this cluster"*  
+  So you just pick a subdomain (e.g. `zenml-amit`) and use it. No ACME challenge, no nip.io, no cert-manager for your deploy.
+
+**Summary:**
+
+| Approach | DNS | TLS | Complexity |
+|----------|-----|-----|------------|
+| nip.io + cert-manager | You use `<namespace>.<lb-ip>.nip.io`; nip.io resolves that to the IP. | cert-manager requests a cert via HTTP-01. | High: LB, ingress, and ACME solver must all align; one misconfiguration breaks the challenge. |
+| Pre-configured staging host (e.g. zenml-amit.staging.example.com) | Staging domain already points to the cluster's LB. | Wildcard (or existing) cert already on the ingress path. | Low: you only add an Ingress with the right host; no cert-manager. |
+
+### 4. The 308 redirect you saw
+
+You saw:
+
+```html
+<html>
+<head><title>308 Permanent Redirect</title></head>
+...
+</html>
+```
+
+That means the ingress controller was configured to redirect HTTP → HTTPS (308 Permanent Redirect). So when you (or the ACME solver) hit `http://zenml-amit.<ip>.nip.io`, the server responded with "go to the HTTPS URL instead" instead of serving the HTTP content. Let's Encrypt's HTTP-01 challenge needs to read the token over **HTTP** on port 80; if the server only redirects to HTTPS, the challenge never sees the token and fails. So that redirect is another reason the nip.io + cert-manager path was problematic.
+
+### 5. What to remember
+
+- **Ingress** = routing rules (host + path → Service). **Ingress controller** = the process that does the actual routing behind the Load Balancer.
+- **cert-manager** = requests certs from CAs (e.g. Let's Encrypt) via challenges (e.g. HTTP-01). It needs the domain to resolve to your cluster and port 80 to serve the challenge; redirects or wrong routing break it.
+- **nip.io** is convenient for quick hostnames, but when something goes wrong, you're debugging DNS + LB + ingress + cert-manager together.
+- Using a **pre-configured staging domain** (e.g. `*.staging.example.com`, or whatever your team provides) avoids all of that: DNS and TLS are already set up; you only add an Ingress with the right host and no cert-manager annotation.
+
+### 6. What is `nip.io`?
+
+**nip.io** is a free “magic” DNS service that turns hostnames into IP addresses using the hostname itself.
+
+**How it works**
+
+- Any hostname that **ends with** `.nip.io` is resolved by nip.io’s DNS servers.
+- The **last part before** `.nip.io` is treated as an IP address (with dots in the hostname standing for dots in the IP).
+- So these all resolve to **18.198.138.196**:
+  - `18.198.138.196.nip.io`
+  - `zenml-amit.18.198.138.196.nip.io`
+  - `anything.you.want.18.198.138.196.nip.io`
+
+**Why people use it**
+
+- You don’t need to buy a domain or configure DNS.
+- You get a “real-looking” hostname (e.g. for Ingress) that still points at your IP (e.g. your Load Balancer).
+- Handy for dev/staging when you don’t have a proper domain.
+
+**The `*` in `*.nip.io`**
+
+- `*` is a wildcard: “any subdomain.”
+- So `*.nip.io` means “any hostname that ends with `.nip.io`” (e.g. `foo.nip.io`, `a.b.c.1.2.3.4.nip.io`). All of those are resolved by nip.io using the same rule above.
+
+**Why it caused trouble in your case**
+
+- You used something like `zenml-amit.<ip>.nip.io` so the hostname contained your LB’s IP. DNS was fine (nip.io resolved it).
+
+- The problem was elsewhere: port 80 not reachable, or HTTP→HTTPS redirect breaking the ACME challenge. So the failure wasn’t nip.io itself, but debugging became harder because you had to think about nip.io, the embedded IP, and the rest of the stack together. That’s why your teammate suggested using the existing staging domain instead.
