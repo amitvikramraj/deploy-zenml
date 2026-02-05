@@ -1,38 +1,33 @@
 zenml:
-
   replicaCount: 1
 
   image:
-    repository: public.ecr.aws/f7g3v0f1/zenml-server
-    tag: amit
+    repository: zenmldocker/zenml-server
 
   defaultProject: default
   database:
     url: "mysql://${AWS_SQL_USERNAME}:${AWS_SQL_PASSWORD}@${AWS_SQL_HOST}:${AWS_SQL_PORT}/${AWS_SQL_DB_NAME}"
 
-
   # Secrets store settings. This is used to store centralized secrets.
   secretsStore:
     enabled: true
-    type: sql
+    type: hashicorp
 
     sql:
       encryptionKey: "${TENANT_DEFAULT_ENCRYPTION_KEY}"
 
     hashicorp:
-
       # The HashiCorp Vault authentication method to use. The currently supported authentication methods are:
       # - token - Use a static token
       # - app_role - Use a Vault App Role (app role ID and secret ID)
       # - aws - Use AWS authentication
-      authMethod: ${VAULT_AUTH_METHOD}
+      authMethod: aws
 
       authConfig:
         vault_addr: "${VAULT_ADDR}"
         mount_point: "${VAULT_MOUNT_POINT}"
         aws_role: "${VAULT_AWS_ROLE}"
         aws_header_value: "${VAULT_AWS_HEADER_VALUE}"
-
 
   service:
     type: ClusterIP
@@ -41,6 +36,11 @@ zenml:
 
   ingress:
     enabled: true
-    className: "nginx"
-    host: zenml-amit.staging.cloudinfra.zenml.io
+    className: "nginx-second"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt"
+    host: zenml-amit.18.197.18.197.nip.io
     path: /
+    tls:
+      enabled: true
+      # secretName:

@@ -330,7 +330,26 @@ kubectl -n zenml-amit logs pod/zenml-server-db-migration-fwphp --follow --all-co
 
 RuntimeError: Error initializing hashicorp secrets store: Vault is sealed, on 
 post https://vault.staging.example.com/v1/auth/aws/login
+
+# Check the vault status
+kubectl -n hashicorp-vault exec -it vault-0 -- vault status                                                                  1 ↵
+Key                Value
+---                -----
+Seal Type          shamir
+Initialized        true
+Sealed             true
+Total Shares       1
+Threshold          1
+Unseal Progress    0/1
+Unseal Nonce       n/a
+Version            1.20.4
+Build Date         2025-09-23T13:22:38Z
+Storage Type       file
+HA Enabled         false
+command terminated with exit code 2
 ```
+
+See [Using HashiCorp Vault with ZenML OSS](#using-hashicorp-vault-with-zenml-oss) below for steps and the "Vault is sealed" fix.
 
 
 * The certificates is not working for me as of now. I was getting the following error:
@@ -426,6 +445,75 @@ kubectl -n zenml-amit get certificate,order,challenge,secret | egrep -i 'zenml|a
 
 * The deployment works without the TLS and you can access the ZenML Server UI via the public URL. Although the browser will shows "Not secure" which is expected.
 
+---
+
+## Using HashiCorp Vault with ZenML OSS
+
+ZenML OSS uses the **same server configuration** for secrets stores as ZenML Pro. The [ZenML Pro docs for HashiCorp Vault](https://docs.zenml.io/pro/access-management/secrets-stores#hashicorp-vault) describe the same concepts; the difference is how you obtain and manage the server (OSS vs Pro). For a Helm-based OSS deploy, you configure Vault via the same `zenml.secretsStore` values and environment variables.
+
+1. Make sure the Vault is unsealed and reachable.
+```shell
+kubectl -n hashicorp-vault exec -it vault-0 -- vault status
+```
+
+2. **IAM principal not allowed in the Vault AWS role.** While deploying the ZenML Server you may see:
+```shell
+kubectl -n zenml-amit logs pod/zenml-server-db-migration-<pod-suffix> --follow --all-containers
+
+RuntimeError: Error initializing hashicorp secrets store: IAM Principal 
+"arn:aws:sts::<account-id>:assumed-role/<eks-node-role-name>/i-<instance-id>" does not belong to the role "<vault-role-name>", on post https://vault.<staging-domain>.com/v1/auth/aws/login
+```
+
+**Why this happens:** ZenML uses Vault’s AWS auth method. The pod authenticates with its IAM identity (often the EKS node group role). Vault has an AWS “role” (e.g. `myapp`) that defines *which* IAM principals are allowed to log in. If the pod’s IAM principal is not in that list, Vault returns “does not belong to the role”.
+
+3. **Fix: add your IAM principal(s) to the Vault AWS role.** Someone with a Vault token that can write to `auth/aws/role/*` must update the role so the ZenML pod’s IAM principal is allowed. You do that by calling Vault’s API to create/update the role with the correct `bound_iam_principal_arn` list.
+
+**Why we run this:** So that when the ZenML pod (using the node group IAM role, or an IRSA role) calls `auth/aws/login`, Vault sees that principal in the role’s allowed list and issues a token with the policy that grants access to the KV mount (e.g. `kv-user-a`).
+
+**What the command does:** It `POST`s a JSON body to `$VAULT_ADDR/v1/auth/aws/role/<vault-role-name>`, which creates or overwrites that AWS auth role. The body says: (1) which IAM principals may assume this role (`bound_iam_principal_arn`), (2) which Vault policy to attach to the issued token (`policies`), and (3) token TTL limits.
+
+Replace placeholders:
+
+- `$VAULT_TOKEN`, `$VAULT_ADDR`
+- `<vault-role-name>` – The AWS auth role name ZenML uses (same as `VAULT_AWS_ROLE` in your env, e.g. `myapp`).
+- `bound_iam_principal_arn` – List of IAM **role** ARNs allowed to assume this Vault role. Include:
+  
+  - The EKS node group role ARN if your ZenML pod uses the node’s IAM role (e.g. `arn:aws:iam::<account-id>:role/main-eks-node-group-...`). Get the exact ARN from the error message (`assumed-role/<name>` → IAM role ARN is `arn:aws:iam::<account-id>:role/<name>`).
+  
+  - Optionally, an IRSA role ARN if you use a dedicated service account role for ZenML.
+
+- `policies` – The Vault policy name that grants access to your KV mount (e.g. `kv-user-a`). That policy should allow `create`, `read`, `update`, `delete`, `list` on `kv-user-a/*` (or your mount path).
+
+**Example:** Add both the node group role and an IRSA role so either can be used:
+
+```shell
+curl -sS -X POST \
+  -H "X-Vault-Token: $VAULT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "auth_type": "iam",
+    "bound_iam_principal_arn": [
+      "arn:aws:iam::<account-id>:role/<zenml-irsa-role-name>",
+      "arn:aws:iam::<account-id>:role/<eks-node-group-role-name>"
+    ],
+    "policies": ["$VAULT_MOUNT_POINT"],
+    "ttl": "1h",
+    "max_ttl": "24h"
+  }' \
+  "$VAULT_ADDR/v1/auth/aws/role/<vault-role-name>"
+```
+
+After this, redeploy ZenML (or retry the failing migration). The pod’s IAM principal will be in the allowed list and Vault will issue a token with the given policy.
+
+
+### Why "Vault is sealed" and what to do
+
+When Vault starts (or after a restart), it is **sealed**: it holds the data but will not serve requests until it is **unsealed** with the correct number of unseal keys. This is a security feature.
+
+- **Manual unseal:** An operator runs `vault operator unseal` (once or multiple times depending on threshold) with the unseal keys. Common in dev/staging; in production many teams prefer auto-unseal so restarts don’t require an operator.
+- **Auto-unseal:** Vault is configured to use a KMS (e.g. AWS KMS) so it can unseal itself on startup. No manual unseal keys needed in the normal flow. See [HashiCorp: Auto-unseal](https://developer.hashicorp.com/vault/docs/configuration/seal#auto-unseal).
+
+---
 
 ## Appendix: Understanding the problem from first principles
 
