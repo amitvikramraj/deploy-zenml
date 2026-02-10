@@ -9,6 +9,8 @@ Deploying ZenML Server on a local K3s cluster.
 3. [Self-hosting a ZenML OSS Server on an existing EKS cluster](./docs/eks/zenml-oss.md)
 4. [Self-hosting ZenML Pro on an existing EKS cluster](./docs/eks/zenml-pro.md)
 
+To follow the guide, make sure you have the environment variables set in as per the [.env.example](.env.example) file.
+
 ## Setup
 
 1. Install kubectl, heml
