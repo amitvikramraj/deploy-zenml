@@ -105,108 +105,114 @@ aws rds describe-db-instances --db-instance-identifier <db-instance-identifier> 
 ```
 
 4. Inspect the EKS cluster
-```shell
-kubectl get namespace    
-NAME                                         STATUS   AGE
-amazon-cloudwatch                            Active   442d
-argocd                                       Active   533d
-cert-manager                                 Active   645d
-default                                      Active   645d
-hashicorp-vault                              Active   130d
-ingress-nginx                                Active   645d
-ingress-nginx-second                         Active   375d
-karpenter                                    Active   219d
-kube-node-lease                              Active   645d
-kube-public                                  Active   645d
-kube-system                                  Active   645d
-kube-workloads                               Active   442d
-zenml-amit                                   Active   23h
+
+  <details>
+  <summary>Example output:</summary>
+
+  ```shell
+  kubectl get namespace    
+  NAME                                         STATUS   AGE
+  amazon-cloudwatch                            Active   442d
+  argocd                                       Active   533d
+  cert-manager                                 Active   645d
+  default                                      Active   645d
+  hashicorp-vault                              Active   130d
+  ingress-nginx                                Active   645d
+  ingress-nginx-second                         Active   375d
+  karpenter                                    Active   219d
+  kube-node-lease                              Active   645d
+  kube-public                                  Active   645d
+  kube-system                                  Active   645d
+  kube-workloads                               Active   442d
+  zenml-amit                                   Active   23h
 
 
-# Inspect the Vault
-╭─amit@mac ~
-╰─$ kubectl -n hashicorp-vault get pod,svc
-NAME                                        READY   STATUS    RESTARTS   AGE
-pod/vault-0                                 0/1     Running   0          54d
-pod/vault-agent-injector-<...>   1/1     Running   0          68d
+  # Inspect the Vault
+  ╭─amit@mac ~
+  ╰─$ kubectl -n hashicorp-vault get pod,svc
+  NAME                                        READY   STATUS    RESTARTS   AGE
+  pod/vault-0                                 0/1     Running   0          54d
+  pod/vault-agent-injector-<...>   1/1     Running   0          68d
 
-NAME                               TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)             AGE
-service/vault                      ClusterIP   <...>           <none>        8200/TCP,8201/TCP   103d
-service/vault-agent-injector-svc   ClusterIP   <...>           <none>        443/TCP             103d
-service/vault-internal             ClusterIP   None            <none>        8200/TCP,8201/TCP   103d
-service/vault-ui                   ClusterIP   <...>           <none>        8200/TCP            103d
+  NAME                               TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)             AGE
+  service/vault                      ClusterIP   <...>           <none>        8200/TCP,8201/TCP   103d
+  service/vault-agent-injector-svc   ClusterIP   <...>           <none>        443/TCP             103d
+  service/vault-internal             ClusterIP   None            <none>        8200/TCP,8201/TCP   103d
+  service/vault-ui                   ClusterIP   <...>           <none>        8200/TCP            103d
 
-# ^^^Vault is running on port 8200 & 8201.
+  # ^^^Vault is running on port 8200 & 8201.
 
 
-# Get the Vault Info:
-╭─amit@mac ~
-╰─$ kubectl -n hashicorp-vault exec -it vault-0 -- vault status
+  # Get the Vault Info:
+  ╭─amit@mac ~
+  ╰─$ kubectl -n hashicorp-vault exec -it vault-0 -- vault status
 
-Key                Value
----                -----
-Seal Type          shamir
-Initialized        true
-Sealed             true
-Total Shares       1
-Threshold          1
-Unseal Progress    0/1
-Unseal Nonce       n/a
-Version            1.20.4
-Build Date         2025-09-23T13:22:38Z
-Storage Type       file
-HA Enabled         false
-command terminated with exit code 2
+  Key                Value
+  ---                -----
+  Seal Type          shamir
+  Initialized        true
+  Sealed             true
+  Total Shares       1
+  Threshold          1
+  Unseal Progress    0/1
+  Unseal Nonce       n/a
+  Version            1.20.4
+  Build Date         2025-09-23T13:22:38Z
+  Storage Type       file
+  HA Enabled         false
+  command terminated with exit code 2
 
-# ^^^The vault is sealed, so we may not be able to use it yet.
-```
+  # ^^^The vault is sealed, so we may not be able to use it yet.
+  ```
+  </details>
+  <br>
 
-* The cluster is setup with a hashicorp vault, a cert-manager, and a ingress-nginx.
-  * We will use the vault for secrets management.
-  * We will use the cert-manager for TLS and DNS management.
-  * We will use the ingress-nginx for ingress traffic management.
+   * The cluster is setup with a hashicorp vault, a cert-manager, and a ingress-nginx.
+     * We will use the vault for secrets management.
+     * We will use the cert-manager for TLS and DNS management.
+     * We will use the ingress-nginx for ingress traffic management.
 
 5. Get the SQL credentials for MySQL Instance & Vault info from Secret Manager and put them in a `.env` file.
 
-```shell
-export AWS_SQL_USERNAME=<aws-sql-username>
-export AWS_SQL_PASSWORD=<aws-sql-password>
-export AWS_SQL_HOST=<aws-sql-host>
-export AWS_SQL_PORT=<aws-sql-port>
-export AWS_SQL_DB_NAME=<aws-sql-db-name>
-export TENANT_DEFAULT_ENCRYPTION_KEY=<tenant-encryption-key>
+  ```shell
+  export AWS_SQL_USERNAME=<aws-sql-username>
+  export AWS_SQL_PASSWORD=<aws-sql-password>
+  export AWS_SQL_HOST=<aws-sql-host>
+  export AWS_SQL_PORT=<aws-sql-port>
+  export AWS_SQL_DB_NAME=<aws-sql-db-name>
+  export TENANT_DEFAULT_ENCRYPTION_KEY=<tenant-encryption-key>
 
-export VAULT_ADDR=<vault-addr>
-export VAULT_MOUNT_POINT=<vault-mount-point>
-export VAULT_AUTH_METHOD=<vault-auth-method>
-export VAULT_AWS_ROLE=<vault-aws-role>
-export VAULT_AWS_HEADER_VALUE=<vault-aws-header-value>
-```
+  export VAULT_ADDR=<vault-addr>
+  export VAULT_MOUNT_POINT=<vault-mount-point>
+  export VAULT_AUTH_METHOD=<vault-auth-method>
+  export VAULT_AWS_ROLE=<vault-aws-role>
+  export VAULT_AWS_HEADER_VALUE=<vault-aws-header-value>
+  ```
 
-Explaining the vault config:
+  Explaining the vault config:
 
-* `VAULT_ADDR`: Where the ZenML server pod should reach Vault.
+   * `VAULT_ADDR`: Where the ZenML server pod should reach Vault.
 
-    For in-cluster access, this is usually the Kubernetes Service DNS: `http://vault.hashicorp-vault.svc.cluster.local:8200`
-(Your vault ingress exists too, but in-cluster DNS is simplest and avoids hairpinning out to the ELB.)
+       For in-cluster access, this is usually the Kubernetes Service DNS: `http://vault.hashicorp-vault.svc.cluster.local:8200`
+   (Your vault ingress exists too, but in-cluster DNS is simplest and avoids hairpinning out to the ELB.)
 
-* `VAULT_MOUNT_POINT`: This is the KV secrets engine mount inside Vault where ZenML will store secrets.
+   * `VAULT_MOUNT_POINT`: This is the KV secrets engine mount inside Vault where ZenML will store secrets.
 
-    Example values: `secret` (common default), `kv`, `zenml-secrets`
+       Example values: `secret` (common default), `kv`, `zenml-secrets`
 
-* `VAULT_AUTH_METHOD`: How ZenML will log into Vault.
+   * `VAULT_AUTH_METHOD`: How ZenML will log into Vault.
 
-    Common options you’ll see in helm charts/apps: `token` (simple but long-lived), `app_role`, `aws`
+       Common options you’ll see in helm charts/apps: `token` (simple but long-lived), `app_role`, `aws`
 
-* `VAULT_AWS_ROLE`: This is a Vault role name configured under Vault’s AWS auth method. 
+   * `VAULT_AWS_ROLE`: This is a Vault role name configured under Vault’s AWS auth method. 
 
-    This is a Vault role name configured under Vault’s AWS auth method. When ZenML logs in, it asks Vault: “log me in using AWS auth under this role name”.
+       This is a Vault role name configured under Vault’s AWS auth method. When ZenML logs in, it asks Vault: “log me in using AWS auth under this role name”.
 
-* `VAULT_AWS_HEADER_VALUE`: This is almost certainly the Vault AWS auth “server ID header” value (used with the header X-Vault-AWS-IAM-Server-ID) to prevent replay attacks / ensure the login request targets the expected Vault. 
-  
-    In AWS auth flows, clients include this header when calling Vault’s login endpoint.
+   * `VAULT_AWS_HEADER_VALUE`: This is almost certainly the Vault AWS auth “server ID header” value (used with the header X-Vault-AWS-IAM-Server-ID) to prevent replay attacks / ensure the login request targets the expected Vault. 
+     
+       In AWS auth flows, clients include this header when calling Vault’s login endpoint.
 
-* Net: you probably do NOT need a Vault token at all if the auth_method is AWS and your pod has AWS credentials (via IRSA).
+   * Net: you probably do NOT need a Vault token at all if the auth_method is AWS and your pod has AWS credentials (via IRSA).
 
 
 6. Creating the helm values file for the ZenML Server
@@ -305,7 +311,7 @@ Explaining the vault config:
   ./run install:zenml-oss-server-aws
   ```
 
-To check the status of the certificate:
+  To check the status of the certificate:
   ```shell
   # Watch the certificate resources being created
   kubectl -n zenml-amit get certificate,order,challenge -w
@@ -320,7 +326,7 @@ To check the status of the certificate:
   kubectl -n zenml-amit describe challenge <challenge-name>
   ```
 
-If something fails, check the logs of the pods:
+  If something fails, check the logs of the pods:
   ```shell
   kubectl -n zenml-amit get pods                                                          
   NAME                              READY   STATUS    RESTARTS   AGE
