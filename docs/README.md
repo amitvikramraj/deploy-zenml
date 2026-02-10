@@ -1,5 +1,9 @@
 # **ZenML OSS vs ZenML Pro System Architecture**
 
+1. [Deploy ZenML OSS](./eks/zenml-oss.md)
+2. [Deploy ZenML Pro](./eks/zenml-pro.md)
+
+
 > I asked ChatGPT Deep Research to explain me ZenML OSS & Pro Architecture with a focus on Kubernetes.
 
 

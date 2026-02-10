@@ -7,75 +7,79 @@ The current state is:
 
 1. Setting up kubeconfig to locally access the EKS cluster
 
-```shell
-# options:
-# --alias (string) Alias for the cluster context name. Defaults to match cluster ARN.
-# --user-alias (string) Alias for the generated user name. Defaults to match cluster ARN.
+  ```shell
+  # options:
+  # --alias (string) Alias for the cluster context name. Defaults to match cluster ARN.
+  # --user-alias (string) Alias for the generated user name. Defaults to match cluster ARN.
 
-aws eks update-kubeconfig \
-    --name <cluster-name> \
-    --alias eks-zenml \
-    --user-alias zenml-amit \
-    --profile <aws-profile-name> \
-    --region <aws-region>
+  aws eks update-kubeconfig \
+      --name <cluster-name> \
+      --alias eks-zenml \
+      --user-alias zenml-amit \
+      --profile <aws-profile-name> \
+      --region <aws-region>
 
-# Switch to the new context
-kubectl config use-context eks-zenml
+  # Switch to the new context
+  kubectl config use-context eks-zenml
 
-kubectl config get-contexts
-CURRENT   NAME             CLUSTER                                                              AUTHINFO         NAMESPACE
-          docker-desktop   docker-desktop                                                       docker-desktop   
-*         eks-zenml        arn:aws:eks:<aws-region>:<aws-account-id>:cluster/<cluster-name>     zenml-amit 
-```
-^^^ This creates a context, `eks-zenml`, in your `~/.kube/config` file witha user `zenml-amit` to authenticate with the EKS cluster.
+  kubectl config get-contexts
+  CURRENT   NAME             CLUSTER                                                              AUTHINFO         NAMESPACE
+            docker-desktop   docker-desktop                                                       docker-desktop   
+  *         eks-zenml        arn:aws:eks:<aws-region>:<aws-account-id>:cluster/<cluster-name>     zenml-amit 
+  ```
+  ^^^ This creates a context, `eks-zenml`, in your `~/.kube/config` file witha user `zenml-amit` to authenticate with the EKS cluster.
 
-Example `~/.kube/config` file:
-```yaml
-apiVersion: v1
-clusters:
-  - cluster:
-      certificate-authority-data: ...
-      server: <docker-desktop-server-url>
-    name: docker-desktop
-  - cluster:
-      certificate-authority-data: ...
-      server: <eks-cluster-server-url>
-    name: arn:aws:eks:<aws-region>:<aws-account-id>:cluster/<cluster-name>
-contexts:
-  - context:
-      cluster: docker-desktop
-      user: docker-desktop
-    name: docker-desktop
-  - context:
-      cluster: arn:aws:eks:<aws-region>:<aws-account-id>:cluster/<cluster-name>
-      user: <user-name>
-    name: eks-zenml
-current-context: eks-zenml
-kind: Config
-users:
-  - name: docker-desktop
-    user:
-      client-certificate-data: ...
-      client-key-data: ...
-  - name: <user-name>
-    user:
-      exec:
-        apiVersion: client.authentication.k8s.io/v1beta1
-        args:
-          - --region
-          - <aws-region>
-          - eks
-          - get-token
-          - --cluster-name
-          - <cluster-name>
-          - --output
-          - json
-        command: aws
-        env:
-          - name: AWS_PROFILE
-            value: <aws-profile-name>
-```
+  <details>
+  <summary>Example <code>~/.kube/config</code> file:</summary>
 
+  ```yaml
+  apiVersion: v1
+  clusters:
+    - cluster:
+        certificate-authority-data: ...
+        server: <docker-desktop-server-url>
+      name: docker-desktop
+    - cluster:
+        certificate-authority-data: ...
+        server: <eks-cluster-server-url>
+      name: arn:aws:eks:<aws-region>:<aws-account-id>:cluster/<cluster-name>
+  contexts:
+    - context:
+        cluster: docker-desktop
+        user: docker-desktop
+      name: docker-desktop
+    - context:
+        cluster: arn:aws:eks:<aws-region>:<aws-account-id>:cluster/<cluster-name>
+        user: <user-name>
+      name: eks-zenml
+  current-context: eks-zenml
+  kind: Config
+  users:
+    - name: docker-desktop
+      user:
+        client-certificate-data: ...
+        client-key-data: ...
+    - name: <user-name>
+      user:
+        exec:
+          apiVersion: client.authentication.k8s.io/v1beta1
+          args:
+            - --region
+            - <aws-region>
+            - eks
+            - get-token
+            - --cluster-name
+            - <cluster-name>
+            - --output
+            - json
+          command: aws
+          env:
+            - name: AWS_PROFILE
+              value: <aws-profile-name>
+  ```
+
+  </details>
+<br>
 
 2. Verify if you can access the EKS cluster
 
@@ -246,202 +250,216 @@ Explaining the vault config:
             ```
         2. Update the values file to use the cluster issuer like shown below.
 
-```yaml
-zenml:
-  database:
-    # E.g.: "mysql://admin:password@zenml-mysql:3306/database"
-    url: "mysql://${AWS_SQL_USERNAME}:${AWS_SQL_PASSWORD}@${AWS_SQL_HOST}:${AWS_SQL_PORT}/${AWS_SQL_DB_NAME}"
+    <details>
+    <summary>Example <code>values.yaml</code> file:</summary>
 
-  # Secrets store settings. This is used to store centralized secrets.
-  secretsStore:
-    enabled: true
-    type: hashicorp
+    ```yaml
+    zenml:
+      database:
+        # E.g.: "mysql://admin:password@zenml-mysql:3306/database"
+        url: "mysql://${AWS_SQL_USERNAME}:${AWS_SQL_PASSWORD}@${AWS_SQL_HOST}:${AWS_SQL_PORT}/${AWS_SQL_DB_NAME}"
 
-    sql:
-      encryptionKey: "${TENANT_DEFAULT_ENCRYPTION_KEY}"
+      # Secrets store settings. This is used to store centralized secrets.
+      secretsStore:
+        enabled: true
+        type: hashicorp
 
-    hashicorp:
-      authMethod: aws
+        sql:
+          encryptionKey: "${TENANT_DEFAULT_ENCRYPTION_KEY}"
 
-      authConfig:
-        # The url of the HashiCorp Vault server
-        vault_addr: "${VAULT_ADDR}"
+        hashicorp:
+          authMethod: aws
 
-        # The mount point to use (defaults to "secret" if not set)
-        mount_point: "${VAULT_MOUNT_POINT}"
+          authConfig:
+            # The url of the HashiCorp Vault server
+            vault_addr: "${VAULT_ADDR}"
 
-        # Custom mount point to use for the authentication method.
-        auth_mount_point:
-        aws_role: "${VAULT_AWS_ROLE}"
-        aws_header_value: "${VAULT_AWS_HEADER_VALUE}"
+            # The mount point to use (defaults to "secret" if not set)
+            mount_point: "${VAULT_MOUNT_POINT}"
 
-  ingress:
-    enabled: true
-    className: "nginx"
-    annotations:
-      cert-manager.io/cluster-issuer: "letsencrypt"
+            # Custom mount point to use for the authentication method.
+            auth_mount_point:
+            aws_role: "${VAULT_AWS_ROLE}"
+            aws_header_value: "${VAULT_AWS_HEADER_VALUE}"
 
-    host: zenml-amit.<ip>.nip.io
-    path: /
-    tls:
-      enabled: true
-      generateCerts: false
-      secretName: zenml-tls-certs
-```
+      ingress:
+        enabled: true
+        className: "nginx"
+        annotations:
+          cert-manager.io/cluster-issuer: "letsencrypt"
+
+        host: zenml-amit.<ip>.nip.io
+        path: /
+        tls:
+          enabled: true
+          generateCerts: false
+          secretName: zenml-tls-certs
+    ```
+
+    </details>
+    <br>
 
 7. Deploy the ZenML Server
 
-```shell
-./run install:zenml-server-aws
-```
+  ```shell
+  ./run install:zenml-oss-server-aws
+  ```
 
 To check the status of the certificate:
-```shell
-# Watch the certificate resources being created
-kubectl -n zenml-amit get certificate,order,challenge -w
+  ```shell
+  # Watch the certificate resources being created
+  kubectl -n zenml-amit get certificate,order,challenge -w
 
-kubectl -n zenml-amit get certificate
-# You should eventually see Status: Ready
+  kubectl -n zenml-amit get certificate
+  # You should eventually see Status: Ready
 
-kubectl -n zenml-amit describe certificate zenml-amit-tls
-kubectl -n zenml-amit get challenge,order
+  kubectl -n zenml-amit describe certificate zenml-amit-tls
+  kubectl -n zenml-amit get challenge,order
 
-# Describe the challenge
-kubectl -n zenml-amit describe challenge <challenge-name>
-```
+  # Describe the challenge
+  kubectl -n zenml-amit describe challenge <challenge-name>
+  ```
 
 If something fails, check the logs of the pods:
-```shell
-kubectl -n zenml-amit get pods                                                          
-NAME                              READY   STATUS    RESTARTS   AGE
-cm-acme-http-solver-dlnm8         1/1     Running   0          166m
-zenml-server-6944684fbc-s8j8n     1/1     Running   0          3h37m
-zenml-server-db-migration-fwphp   0/1     Error     0          55m
+  ```shell
+  kubectl -n zenml-amit get pods                                                          
+  NAME                              READY   STATUS    RESTARTS   AGE
+  cm-acme-http-solver-dlnm8         1/1     Running   0          166m
+  zenml-server-6944684fbc-s8j8n     1/1     Running   0          3h37m
+  zenml-server-db-migration-fwphp   0/1     Error     0          55m
 
-# Check the logs of the pod
-kubectl -n zenml-amit logs pod/zenml-server-db-migration-fwphp --follow --all-containers
-```
+  # Check the logs of the pod
+  kubectl -n zenml-amit logs pod/zenml-server-db-migration-fwphp --follow --all-containers
+  ```
 
-**Errros:**
+## Errors:
 
 * The vault is sealed, so I couldn't used it. I need to learn how do people use the vault in production.
-```shell
-kubectl -n zenml-amit logs pod/zenml-server-db-migration-fwphp --follow --all-containers
 
-RuntimeError: Error initializing hashicorp secrets store: Vault is sealed, on 
-post https://vault.staging.example.com/v1/auth/aws/login
+  ```shell
+  kubectl -n zenml-amit logs pod/zenml-server-db-migration-fwphp --follow --all-containers
 
-# Check the vault status
-kubectl -n hashicorp-vault exec -it vault-0 -- vault status                                                                  1 ↵
-Key                Value
----                -----
-Seal Type          shamir
-Initialized        true
-Sealed             true
-Total Shares       1
-Threshold          1
-Unseal Progress    0/1
-Unseal Nonce       n/a
-Version            1.20.4
-Build Date         2025-09-23T13:22:38Z
-Storage Type       file
-HA Enabled         false
-command terminated with exit code 2
-```
+  RuntimeError: Error initializing hashicorp secrets store: Vault is sealed, on 
+  post https://vault.staging.example.com/v1/auth/aws/login
 
-See [Using HashiCorp Vault with ZenML OSS](#using-hashicorp-vault-with-zenml-oss) below for steps and the "Vault is sealed" fix.
+  # Check the vault status
+  kubectl -n hashicorp-vault exec -it vault-0 -- vault status                                                                  1 ↵
+  Key                Value
+  ---                -----
+  Seal Type          shamir
+  Initialized        true
+  Sealed             true
+  Total Shares       1
+  Threshold          1
+  Unseal Progress    0/1
+  Unseal Nonce       n/a
+  Version            1.20.4
+  Build Date         2025-09-23T13:22:38Z
+  Storage Type       file
+  HA Enabled         false
+  command terminated with exit code 2
+  ```
+
+  See [Using HashiCorp Vault with ZenML OSS](#using-hashicorp-vault-with-zenml-oss) below for steps and the "Vault is sealed" fix.
 
 
 * The certificates is not working for me as of now. I was getting the following error:
-```shell
-kubectl -n zenml-amit describe challenge <challenge-name>
 
-Reason: Waiting for HTTP-01 challenge propagation: failed to perform self check GET request 'http://zenml-amit.<ip>.nip.io/.well-known/acme-challenge/1tZl4C40JdxtU_04Se50sOTW5avqf5CxrD6cmC_NaTA': Get "http://zenml-amit.<ip>.nip.io/.well-known/acme-challenge/1tZl4C40JdxtU_04Se50sOTW5avqf5CxrD6cmC_NaTA": dial tcp <ip>:80: connect: connection refused
+  <details>
+  <summary>Example error:</summary>
 
+  ```shell
+  kubectl -n zenml-amit describe challenge <challenge-name>
 
-kubectl -n zenml-amit describe cert
-
-Name:         zenml-tls-certs
-Namespace:    zenml-amit
-Labels:       app.kubernetes.io/instance=zenml-server
-              app.kubernetes.io/managed-by=Helm
-              app.kubernetes.io/name=zenml
-              app.kubernetes.io/version=0.93.2
-              helm.sh/chart=zenml-0.93.2
-Annotations:  <none>
-API Version:  cert-manager.io/v1
-Kind:         Certificate
-Metadata:
-  Creation Timestamp:  2026-02-04T12:45:15Z
-  Generation:          1
-  Owner References:
-    API Version:           networking.k8s.io/v1
-    Block Owner Deletion:  true
-    Controller:            true
-    Kind:                  Ingress
-    Name:                  zenml-server
-    UID:                   d90d9c05-5243-4f26-8ee4-2d012be9df9b
-  Resource Version:        253813479
-  UID:                     fd4e10d6-7086-4e33-a524-7e7200fea86c
-Spec:
-  Dns Names:
-    zenml-amit.18.198.138.196.nip.io
-  Issuer Ref:
-    Group:      cert-manager.io
-    Kind:       ClusterIssuer
-    Name:       letsencrypt
-  Secret Name:  zenml-tls-certs
-  Usages:
-    digital signature
-    key encipherment
-Status:
-  Conditions:
-    Last Transition Time:        2026-02-04T12:45:15Z
-    Message:                     Issuing certificate as Secret does not exist
-    Observed Generation:         1
-    Reason:                      DoesNotExist
-    Status:                      True
-    Type:                        Issuing
-    Last Transition Time:        2026-02-04T12:45:15Z
-    Message:                     Issuing certificate as Secret does not exist
-    Observed Generation:         1
-    Reason:                      DoesNotExist
-    Status:                      False
-    Type:                        Ready
-  Next Private Key Secret Name:  zenml-tls-certs-h8p9x
-Events:
-  Type    Reason     Age    From                                       Message
-  ----    ------     ----   ----                                       -------
-  Normal  Issuing    2m21s  cert-manager-certificates-trigger          Issuing certificate as Secret does not exist
-  Normal  Generated  2m21s  cert-manager-certificates-key-manager      Stored new private key in temporary Secret resource "zenml-tls-certs-h8p9x"
-  Normal  Requested  2m21s  cert-manager-certificates-request-manager  Created new CertificateRequest resource "zenml-tls-certs-wzlrr"
+  Reason: Waiting for HTTP-01 challenge propagation: failed to perform self check GET request 'http://zenml-amit.<ip>.nip.io/.well-known/acme-challenge/1tZl4C40JdxtU_04Se50sOTW5avqf5CxrD6cmC_NaTA': Get "http://zenml-amit.<ip>.nip.io/.well-known/acme-challenge/1tZl4C40JdxtU_04Se50sOTW5avqf5CxrD6cmC_NaTA": dial tcp <ip>:80: connect: connection refused
 
 
-curl -k https://zenml-amit.<ip>.nip.io
-# ^^^This was giving me error
-<html>
-<head><title>308 Permanent Redirect</title></head>
-<body>
-<center><h1>308 Permanent Redirect</h1></center>
-<hr><center>nginx</center>
-</body>
-</html>
-```
+  kubectl -n zenml-amit describe cert
+
+  Name:         zenml-tls-certs
+  Namespace:    zenml-amit
+  Labels:       app.kubernetes.io/instance=zenml-server
+                app.kubernetes.io/managed-by=Helm
+                app.kubernetes.io/name=zenml
+                app.kubernetes.io/version=0.93.2
+                helm.sh/chart=zenml-0.93.2
+  Annotations:  <none>
+  API Version:  cert-manager.io/v1
+  Kind:         Certificate
+  Metadata:
+    Creation Timestamp:  2026-02-04T12:45:15Z
+    Generation:          1
+    Owner References:
+      API Version:           networking.k8s.io/v1
+      Block Owner Deletion:  true
+      Controller:            true
+      Kind:                  Ingress
+      Name:                  zenml-server
+      UID:                   d90d9c05-5243-4f26-8ee4-2d012be9df9b
+    Resource Version:        253813479
+    UID:                     fd4e10d6-7086-4e33-a524-7e7200fea86c
+  Spec:
+    Dns Names:
+      zenml-amit.18.198.138.196.nip.io
+    Issuer Ref:
+      Group:      cert-manager.io
+      Kind:       ClusterIssuer
+      Name:       letsencrypt
+    Secret Name:  zenml-tls-certs
+    Usages:
+      digital signature
+      key encipherment
+  Status:
+    Conditions:
+      Last Transition Time:        2026-02-04T12:45:15Z
+      Message:                     Issuing certificate as Secret does not exist
+      Observed Generation:         1
+      Reason:                      DoesNotExist
+      Status:                      True
+      Type:                        Issuing
+      Last Transition Time:        2026-02-04T12:45:15Z
+      Message:                     Issuing certificate as Secret does not exist
+      Observed Generation:         1
+      Reason:                      DoesNotExist
+      Status:                      False
+      Type:                        Ready
+    Next Private Key Secret Name:  zenml-tls-certs-h8p9x
+  Events:
+    Type    Reason     Age    From                                       Message
+    ----    ------     ----   ----                                       -------
+    Normal  Issuing    2m21s  cert-manager-certificates-trigger          Issuing certificate as Secret does not exist
+    Normal  Generated  2m21s  cert-manager-certificates-key-manager      Stored new private key in temporary Secret resource "zenml-tls-certs-h8p9x"
+    Normal  Requested  2m21s  cert-manager-certificates-request-manager  Created new CertificateRequest resource "zenml-tls-certs-wzlrr"
+
+
+  curl -k https://zenml-amit.<ip>.nip.io
+  # ^^^This was giving me error
+  <html>
+  <head><title>308 Permanent Redirect</title></head>
+  <body>
+  <center><h1>308 Permanent Redirect</h1></center>
+  <hr><center>nginx</center>
+  </body>
+  </html>
+  ```
+
+  </details>
+  <br>
 
   * So to clean up the certificate resources, I first disable the `tls: enabled: false` in the values file, redeployed the ZenML Server so that the certificate resources are freed up and then used the following commands to clean up the certificate resources.
 
-Cleaning up:
-```shell
-# Clean up the certificate resources
-kubectl -n zenml-amit delete certificate --all
-kubectl -n zenml-amit delete order --all
-kubectl -n zenml-amit delete challenge --all
-kubectl -n zenml-amit delete pod -l acme.cert-manager.io/http01-solver=true
-kubectl -n zenml-amit delete secret zenml-amit-tls-certs --ignore-not-found
+  * Cleaning up:
+  ```shell
+  # Clean up the certificate resources
+  kubectl -n zenml-amit delete certificate --all
+  kubectl -n zenml-amit delete order --all
+  kubectl -n zenml-amit delete challenge --all
+  kubectl -n zenml-amit delete pod -l acme.cert-manager.io/http01-solver=true
+  kubectl -n zenml-amit delete secret zenml-amit-tls-certs --ignore-not-found
 
-# Verify if the certificate resources are cleaned up
-kubectl -n zenml-amit get certificate,order,challenge,secret | egrep -i 'zenml|acme|tls'
-```
+  # Verify if the certificate resources are cleaned up
+  kubectl -n zenml-amit get certificate,order,challenge,secret | egrep -i 'zenml|acme|tls'
+  ```
 
 * The deployment works without the TLS and you can access the ZenML Server UI via the public URL. Although the browser will shows "Not secure" which is expected.
 
