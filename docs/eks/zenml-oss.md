@@ -1,4 +1,9 @@
-# Deploying ZenML Server on an existing EKS cluster
+# Self-hosting a ZenML OSS Server on an existing EKS cluster
+
+References:
+* [docs: Deploying ZenML with Helm](https://docs.zenml.io/deploying-zenml/deploying-zenml/deploy-with-helm)
+* [ZenML Helm Chart](https://artifacthub.io/packages/helm/zenml/zenml)
+
 
 The current state is:
 * We already have an EKS cluster with a hashicorp vault, a cert-manager, and a ingress-nginx.

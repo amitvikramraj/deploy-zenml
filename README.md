@@ -6,7 +6,8 @@ Deploying ZenML Server on a local K3s cluster.
 
 1. [Single-node cluster](./docs/local/single-node-cluster.md)
 2. [Multi-node cluster](./docs/local/multi-node-cluster.md)
-3. [Deploying ZenML Server on an existing EKS cluster](./docs/eks/setup.md)
+3. [Self-hosting a ZenML OSS Server on an existing EKS cluster](./docs/eks/zenml-oss.md)
+4. [Self-hosting ZenML Pro on an existing EKS cluster](./docs/eks/zenml-pro.md)
 
 ## Setup
 

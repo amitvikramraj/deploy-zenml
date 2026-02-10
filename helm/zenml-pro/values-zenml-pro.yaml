@@ -1,0 +1,68 @@
+zenml:
+  replicaCount: 1
+
+  image:
+    api:
+      repository: 339712793861.dkr.ecr.eu-central-1.amazonaws.com/zenml-pro-api
+      pullPolicy: Always
+      # Overrides the image tag whose default is the chart appVersion.
+      tag: latest
+    dashboard:
+      # repository: 715803424590.dkr.ecr.eu-west-1.amazonaws.com/zenml-pro-dashboard
+      repository: 339712793861.dkr.ecr.eu-central-1.amazonaws.com/zenml-pro-dashboard
+      pullPolicy: Always
+      # Overrides the image tag whose default is the chart appVersion.
+      tag: stefan
+
+  # The external URL where the ZenML Pro server API and dashboard are reachable.
+  #
+  # The dashboard service will be reachable at this URL under the root path and
+  # the API service will be reachable at the same URL under the path configured
+  # in `zenml.apiRootPath`.
+  serverURL: https://zenml-pro-amit.18.197.18.197.nip.io
+
+  # Whether to enable debug mode in the ZenML Pro server.
+  debug: true
+
+  # Database configuration.
+  database:
+    # Credentials to use to connect to an external Postgres database.
+    external:
+      # The type of the external database service to use:
+      # - postgres: use an external Postgres database service.
+      # - mysql: use an external MySQL database service.
+      type: postgres
+      host: ${AWS_POSTGRES_HOST}
+      port: 5432
+      username: postgres
+      password: ${AWS_POSTGRES_PASSWORD}
+
+      # The name of the database to use. Will be created on first run if it
+      # doesn't exist.
+      #
+      # NOTE: if the user doesn't have permissions to create this database, the
+      # database should be created manually before installing the helm chart.
+      database: zenmlpro_amit
+      # ^^^ I had to manually create the database in the RDS instance.
+
+  auth:
+    password:
+      enabled: true
+      adminUsername: admin
+      # The password of the default admin user that is created when the ZenML
+      # Pro server is installed. If not specified, a random password is
+      # generated when the ZenML Pro server is installed.
+      adminPassword:
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  ingress:
+    enabled: true
+    className: "nginx-second"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt"
+    host: zenml-pro-amit.18.197.18.197.nip.io
+    tls:
+      enabled: true

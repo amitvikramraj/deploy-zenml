@@ -3,6 +3,18 @@ zenml:
 
   image:
     repository: zenmldocker/zenml-server
+  
+  pro:
+      enabled: true
+      apiURL: https://zenml-pro-amit.18.197.18.197.nip.io/api/v1
+      dashboardURL: https://zenml-pro-amit.18.197.18.197.nip.io
+      enrollmentKey: c0q7KRx0sqkeZ_DkcNyVo3z8brLzZSRx2H04G4E3BEJ_ZQxwVV34rnLRgawk-76AOmKRwRU8MNslh0taCK_y9w
+      organizationID: 3c300b3c-b062-4109-8cbc-037b3f204850
+      organizationName: zenml-amit
+      workspaceID: 251ab625-fc96-4ebc-9535-f8cd01da036b
+      workspaceName: zenml-pro-amit-workspace
+  
+  serverURL: https://zenml-amit.18.197.18.197.nip.io
 
   defaultProject: default
   database:
@@ -40,10 +52,7 @@ zenml:
     className: "nginx-second"
     annotations:
       cert-manager.io/cluster-issuer: "letsencrypt"
-    host: zenml-amit.18.197.18.197.nip.io # this IP address assigned to the ingress controller is not static.
-    # Use `kubectl get ns` to get the namespace of the ingress controller.
-    # Use `kubectl get svc -n ingress-nginx` to get the load balancer hostname.
-    # ^^^ Use command `host <load-balancer-hostname>` to get the IP address from the configured load balancer hostname in your EKS cluster.
+    host: zenml-amit.18.197.18.197.nip.io
     path: /
     tls:
       enabled: true

@@ -7,7 +7,34 @@ THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
 
 
 
-install:zenml-server-aws () {
+install:zenml-pro-control-plane-aws () {
+    source "${THIS_DIR}/.env"
+
+    export AWS_PROFILE=zenml-dev
+
+    helm upgrade --install zenml-pro oci://public.ecr.aws/zenml/zenml-pro \
+        --namespace zenml-pro-amit \
+        --create-namespace \
+        --values <(envsubst '$AWS_POSTGRES_HOST $AWS_POSTGRES_PASSWORD' < "${THIS_DIR}/helm/zenml-pro/values-zenml-pro.yaml")
+}
+
+install:zenml-pro-workspace-aws () {
+    source "${THIS_DIR}/.env"
+
+    export AWS_PROFILE=zenml-dev
+
+    helm upgrade --install zenml-server oci://public.ecr.aws/zenml/zenml \
+        --namespace zenml-amit \
+        --values <(envsubst \
+            '$AWS_SQL_USERNAME $AWS_SQL_PASSWORD $AWS_SQL_HOST $AWS_SQL_PORT \
+            $AWS_SQL_DB_NAME $TENANT_DEFAULT_ENCRYPTION_KEY \
+            $VAULT_ADDR $VAULT_MOUNT_POINT $VAULT_AWS_ROLE \
+            $VAULT_AUTH_METHOD $VAULT_AWS_HEADER_VALUE' \
+            < "${THIS_DIR}/helm/zenml-pro/vaules-zenml-workspace.yaml")
+}
+
+
+install:zenml-oss-server-aws () {
     source "${THIS_DIR}/.env"
 
     export AWS_PROFILE=zenml-dev
