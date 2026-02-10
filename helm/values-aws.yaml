@@ -34,6 +34,7 @@ zenml:
     port: 80
     annotations: {}
 
+  # Setup ingress with nip.io
   ingress:
     enabled: true
     className: "nginx-second"
@@ -43,4 +44,10 @@ zenml:
     path: /
     tls:
       enabled: true
-      # secretName:
+
+  # # Setup ingress with an existing domain
+  # ingress:
+  #   enabled: true
+  #   className: "nginx"
+  #   host: zenml-amit.staging.cloudinfra.zenml.io
+  #   path: /
